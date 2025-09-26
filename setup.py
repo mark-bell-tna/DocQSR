@@ -8,7 +8,7 @@ LONG_DESCRIPTION = 'Qualitative Spatial Representation (QSR)'
 # Setting up
 setup(
        # the name must match the folder name 'verysimplemodule'
-        name="QSR", 
+        name="DocQSR", 
         version=VERSION,
         author="Mark Bell",
         author_email="mark.bell@nationalarchives.gov.uk",
