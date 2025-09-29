@@ -14,11 +14,11 @@ setup(
         author_email="mark.bell@nationalarchives.gov.uk",
         description=DESCRIPTION,
         long_description=LONG_DESCRIPTION,
-        packages=['QSR'],
+        packages=['QSR', 'PAGE'],
         requires=['math', 'collections'], # add any additional packages that 
         # needs to be installed along with your package. Eg: 'caer'
 
-        keywords=['python', 'qsr package'],
+        keywords=['python', 'qsr', 'page XML'],
         classifiers= [
             "Development Status :: 3 - Alpha",
             "Intended Audience :: Cultural Heritage",
