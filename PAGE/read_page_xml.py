@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 
-import xmltodict
 from DocQSR.QSR import QSRRectangle, BoxCoords
 from DocQSR.QSR.QSRRectangle import isnumeric, parse_coords, coords_to_box
 #from QSRRectangles import Rectangle, BoxCoords, parse_coords, coords_to_box
@@ -438,7 +437,6 @@ class pageXML(LayoutStructure):
         self.xmlns = "{http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15}"
 
         self.xml_original = None
-        self.xml = None
         self.file_name = None
         self.regions = []
         self.regions_index = {}
@@ -450,11 +448,9 @@ class pageXML(LayoutStructure):
             if os.path.getsize(xml_file) == 0:
                 print("Empty file", xml_file)
                 return
-            self.xml = xmltodict.parse(open(xml_file, 'rb'))
             self.xml_original = lxml.etree.parse(open(xml_file,'rb'))
         else:
             # Could be the text of the XML rather then file itself
-            self.xml = xmltodict.parse(xml_file)
             self.xml_original = lxml.etree.parse(xml_file)
 
         try:
