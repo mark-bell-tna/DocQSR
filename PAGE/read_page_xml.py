@@ -454,7 +454,7 @@ class pageXML(LayoutStructure):
             self.xml_original = lxml.etree.parse(xml_file)
 
         try:
-            self.page = self.xml['PcGts']['Page']
+            # self.page = self.xml['PcGts']['Page']
             self.xml_root = self.xml_original.getroot()
         except:
             print("Not valid page xml")
