@@ -1,16 +1,19 @@
 #!/usr/bin/python3
 
-from DocQSR.QSR import QSRRectangle, BoxCoords
-from DocQSR.QSR.QSRRectangle import isnumeric, parse_coords, coords_to_box
+import xmltodict
+from QSR import QSRRectangle, BoxCoords
+from QSR.QSRRectangle import isnumeric, parse_coords, coords_to_box
 #from QSRRectangles import Rectangle, BoxCoords, parse_coords, coords_to_box
 import hashlib
 import os
 import lxml.etree
 import copy
 import math
-from DocQSR.QSR import QSRAllenDegree
+from QSR import QSRAllenDegree
 from collections import defaultdict
 import numpy as np
+from bisect import bisect_left
+from pathlib import PosixPath, Path
 
 sign = lambda x: math.copysign(1, x) if x != 0 else 0
 
@@ -242,6 +245,10 @@ class pageWord(LayoutStructure):
 
         return self.text
 
+    def update_text(self, new_text):
+
+        self.text = new_text
+
 class pageLine(LayoutStructure):
 
     def __init__(self, line_data):
@@ -281,6 +288,27 @@ class pageLine(LayoutStructure):
     def _asdict(self):
 
         return {'id' : self.id, 'text' : self.text, 'bbox' : self.coords.bbox}
+
+    def get_word_at_index(self, at_index):
+
+        return self.words[at_index]
+
+    def update_word(self, new_text, at_index):
+
+        self.words[position].update_text(new_text)
+
+    def insert_word(self, word_text, bbox, word_id, at_index):
+
+        new_word = pageWord({'id' : word_id, 'text' : word_text, 'coords' : bbox})
+        self.words.insert(at_index, new_word)
+
+    def delete_word(self, at_index):
+
+        del self.words[at_index]
+
+    def refresh_text(self):
+
+        self.text = " ".join(self.words)
 
     def split_horizontal(self, x_pos):
 
@@ -342,6 +370,7 @@ class pageRegion(LayoutStructure):
         self.coords = pageCoord(region_data['Coords'])
         self.text_lines = region_data['lines']
         self.line_index = region_data['index']
+        self._region_type = region_data['region_type']
 
         #if 'lines' in region_data:
         #    text_lines, self.line_index = self._read_lines(region_data['lines'])
@@ -359,6 +388,8 @@ class pageRegion(LayoutStructure):
                 self.text_lines.sort(key=lambda x : x.coords.bbox.bottom)
             self.line_index = dict([(p.id, i) for i,p in enumerate(self.text_lines)])
         '''
+        self.vertical_ordering = sorted(self.text_lines, key=lambda x : x.coords.bbox.bottom)
+
 
     def split_horizontal(self, x_pos):
 
@@ -391,12 +422,37 @@ class pageRegion(LayoutStructure):
 
         return return_val
 
+    def get_line_by_bbox(self, bbox):
+
+        split_above = bisect_left([x.bottom for x in self.vertical_ordering], bbox.top)
+        if split_above >= len(self.vertical_ordering):
+            print(bbox.top, split_above, len(self.vertical_ordering))
+            return None
+        this_line = self.vertical_ordering[split_above]
+        best_overlap = 0
+        best_line = None
+        while this_line.top < bbox.bottom and split_above < len(self.vertical_ordering):
+            this_line = self.vertical_ordering[split_above]
+            max_top = max(this_line.top, bbox.top)
+            min_bottom = min(this_line.bottom, bbox.bottom)
+            if min_bottom-max_top > best_overlap:
+                best_overlap = min_bottom-max_top
+                best_line = this_line
+            split_above += 1
+
+        return best_line
+
 
     def get_line_by_name(self, line_name):
 
         if line_name in self.line_index:
             return self.text_lines[self.line_index[line_name]]
         return None
+
+    @property
+    def region_type(self):
+
+        return self._region_type
 
     @property
     def line_count(self):
@@ -437,24 +493,32 @@ class pageXML(LayoutStructure):
         self.xmlns = "{http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15}"
 
         self.xml_original = None
+        self.xml = None
         self.file_name = None
         self.regions = []
         self.regions_index = {}
+        self.htr_model = None
+        self.layout_model = None
+        self.volume = None
+
         if xml_file is None:
             return
 
         if os.path.isfile(xml_file):
             self.file_name = xml_file
+            self._gen_path_parts(xml_file)
             if os.path.getsize(xml_file) == 0:
                 print("Empty file", xml_file)
                 return
+            self.xml = xmltodict.parse(open(xml_file, 'rb'))
             self.xml_original = lxml.etree.parse(open(xml_file,'rb'))
         else:
             # Could be the text of the XML rather then file itself
+            self.xml = xmltodict.parse(xml_file)
             self.xml_original = lxml.etree.parse(xml_file)
 
         try:
-            # self.page = self.xml['PcGts']['Page']
+            self.page = self.xml['PcGts']['Page']
             self.xml_root = self.xml_original.getroot()
         except:
             print("Not valid page xml")
@@ -475,6 +539,22 @@ class pageXML(LayoutStructure):
         self._image_width = int(self.page.attrib['imageWidth'])
         self._image_file = self.page.attrib['imageFilename']
         self.regions, self.regions_index = self._read_regions()
+
+    def _gen_path_parts(self, xml_file):
+
+        if isinstance(xml_file, PosixPath):
+            self.layout = xml_file.parents[0].split("-")[1]
+            self.htr = xml_file.parents[1].split("-")[1]
+            self.volume = xml_file.parents[2]
+        else:
+            path_parts = xml_file.split("/")
+            self.layout = path_parts[-2].split("-")[1]
+            self.htr = path_parts[-3].split("-")[1]
+            self.volume = path_parts[4]
+
+    def get_path_parts(self):
+
+        return self.volume, self.htr, self.layout
 
     def save_to_file(self, xml_file_name, overwrite=False):
 
@@ -725,7 +805,11 @@ class pageXML(LayoutStructure):
         regions = []
         index = {}
         for x in self.page:
-            if x.tag != f"{self.xmlns}TextRegion":
+            if x.tag == f"{self.xmlns}TextRegion":
+                region_type = "text"
+            elif x.tag == f"{self.xmlns}ImageRegion":
+                region_type = "image"
+            else:
                 continue
             reg_lines = []
             reg_id = x.attrib['id']
@@ -738,7 +822,7 @@ class pageXML(LayoutStructure):
                     reg_lines.append(y)
             line_data, line_index = self._read_lines(reg_lines)
             reg_lines = [pageLine(l | {'region_id' : reg_id}) for l in line_data]
-            this_reg = pageRegion({'id' : reg_id, 'xpath' : reg_xpath, 'Coords' : reg_coords, 'lines' : reg_lines, 'index' : line_index})
+            this_reg = pageRegion({'id' : reg_id, 'region_type' : region_type, 'xpath' : reg_xpath, 'Coords' : reg_coords, 'lines' : reg_lines, 'index' : line_index})
             index[reg_id] = len(index)
             regions.append(this_reg)
 
@@ -839,8 +923,32 @@ class pageXML(LayoutStructure):
                     yield({'region_id' : reg_id, 'bounding_box' : parse_coords(line[points_type]['@points'], return_box=True),
                                                  'coords' : parse_coords(line[points_type]['@points'], return_box=False),
                                                  'raw' : line[points_type]['@points'], 'id' : line['@id'], 'text' : text})
+#        return
+#        for k,v in self.xml['PcGts']['Page'].items():
+#            if k == 'TextRegion':
+#                if isinstance(v, dict):
+#                    if 'TextLine' in v:
+#                        region_lines = [v]
+#                    else:
+#                        print("No text line in dictionary")
+#                        return
+#
+#                elif isinstance(v, list):
+#                    region_lines = v
+#
+#                for reg in region_lines:
+#
+#                    if isinstance(reg, dict):
+#                        lines = [reg]
+#                    else:
+#                        lines = reg
+#                    for ln in lines:
+#                        print(ln)
+#                        yield(parse_coords(ln['Baseline']['@points']))
 
 if __name__ == '__main__':
+
+    from write_to_page import pageWriter
 
     PC = pageCoord(QSRRectangle(BoxCoords(left=10, right=50, top=20, bottom=40)))
     print('raw', PC.raw)
@@ -850,6 +958,52 @@ if __name__ == '__main__':
     print(PC.raw_to_box(lr['left']))
     print(PC.raw_to_box(lr['right']))
 
+    xml_file = '../Outputs/Metagrapho/1148/HTR-219785/LAYOUT-138805/7812a7da0eb50898fe3461904ef0b6d8.xml'
+    xml_file = "../Outputs/Metagrapho/1148/HTR-123193/LAYOUT-138805/67a97b9fc1d8927688b282d344f713f0.xml"
+    xml_file = "../Outputs/Metagrapho/1148/HTR-123193/LAYOUT-138805/88afc09db180a150f9f8b06ecaca07e3.xml"
+    xml_file = "../Outputs/Metagrapho/1148/HTR-218533/LAYOUT-138805/74550d2b93db6d0609e4cfe7495ed36a.xml"
+
+    P = pageXML(xml_file)
+    #PW.write_to_file("./74550d2b93db6d0609e4cfe7495ed36a.xml")
+
+    #exit()
+    for reg in P:
+        print(reg)
+    print("******")
+
+    P.split_region_horizontal('tr_2', 1200)
+    for reg in P:
+        print(reg)
+    PW = pageWriter(P)
+    PW.write_to_file("./74550d2b93db6d0609e4cfe7495ed36a.xml")
+    exit()
+    R = P.get_largest_region()
+    split = R.split_horizontal(1200)
+    print(split['left'])
+    print(split['right'])
+
+    exit()
+
+    for reg in P:
+        print(reg.id, reg)
+        #P.split_region_at(reg.id, 100)
+        for line in reg:
+            print("\t", line)
+            split = line.split_horizontal(700)
+            print(split)
+            exit()
+        print("")
+
+    #P.split_region_vertically('tr_2', 700)
+    P.split_region_horizontally('tr_2', 700)
+    exit()
+
+    for reg in P:
+        print(reg.id, reg)
+        #P.split_region_at(reg.id, 100)
+        for line in reg:
+            print("\t", line)
+        print("")
 
 
 
