@@ -1,15 +1,15 @@
 #!/usr/bin/python3
 
 import xmltodict
-from QSR import QSRRectangle, BoxCoords
-from QSR.QSRRectangle import isnumeric, parse_coords, coords_to_box
+from DocQSR.QSR import QSRRectangle, BoxCoords
+from DocQSR.QSR.QSRRectangle import isnumeric, parse_coords, coords_to_box
 #from QSRRectangles import Rectangle, BoxCoords, parse_coords, coords_to_box
 import hashlib
 import os
 import lxml.etree
 import copy
 import math
-from QSR import QSRAllenDegree
+from DocQSR.QSR import QSRAllenDegree
 from collections import defaultdict
 import numpy as np
 from bisect import bisect_left
