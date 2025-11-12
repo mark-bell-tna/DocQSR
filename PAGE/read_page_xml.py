@@ -506,7 +506,7 @@ class pageXML(LayoutStructure):
 
         if os.path.isfile(xml_file):
             self.file_name = xml_file
-            self._gen_path_parts(xml_file)
+            #self._gen_path_parts(xml_file)
             if os.path.getsize(xml_file) == 0:
                 print("Empty file", xml_file)
                 return
@@ -540,17 +540,19 @@ class pageXML(LayoutStructure):
         self._image_file = self.page.attrib['imageFilename']
         self.regions, self.regions_index = self._read_regions()
 
-    def _gen_path_parts(self, xml_file):
+    # This function is from a different project; Should be removed
+    #def _gen_path_parts(self, xml_file):
 
-        if isinstance(xml_file, PosixPath):
-            self.layout = xml_file.parents[0].split("-")[1]
-            self.htr = xml_file.parents[1].split("-")[1]
-            self.volume = xml_file.parents[2]
-        else:
-            path_parts = xml_file.split("/")
-            self.layout = path_parts[-2].split("-")[1]
-            self.htr = path_parts[-3].split("-")[1]
-            self.volume = path_parts[4]
+     #   try:
+     #       if isinstance(xml_file, PosixPath):
+     #           self.layout = xml_file.parents[0].split("-")[1]
+     #           self.htr = xml_file.parents[1].split("-")[1]
+     #           self.volume = xml_file.parents[2]
+     #       else:
+     #           path_parts = xml_file.split("/")
+     #           self.layout = path_parts[-2].split("-")[1]
+     #           self.htr = path_parts[-3].split("-")[1]
+     #           self.volume = path_parts[4]
 
     def get_path_parts(self):
 
